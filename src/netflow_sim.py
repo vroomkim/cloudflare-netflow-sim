@@ -8,27 +8,85 @@ import sys
 # Flush output immediately
 sys.stdout.reconfigure(line_buffering=True)
 
+def generate_random_ip():
+    """Generates a completely random IP address (The Internet)"""
+    return socket.inet_ntoa(struct.pack('>I', random.randint(1, 0xffffffff)))
+
+def generate_subnet_ip():
+    """Generates a random IP from your specific target subnets"""
+    # Target Prefixes: 100.1.1.0/24 and 212.10.11.0/24
+    prefix = random.choice(["100.1.1", "212.10.11"])
+    return f"{prefix}.{random.randint(1, 254)}"
+
 def send_netflow(dest_ip, dest_port, duration):
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    src_prefixes = ["100.1.1.", "212.10.11."]
     start_time = time.time()
+    last_log_time = start_time
     
-    print(f"Sending NetFlow v5 to {dest_ip}:{dest_port}...")
+    # Configuration
+    SAMPLING_RATE = 1000 
+    SPEED_HIGH = 0.002  # High Volume
+    SPEED_HALF = 0.02   # Half Volume
+    SPEED_LOW  = 0.2    # Low Volume
     
+    current_phase = ""
+
+    print(f"Starting INBOUND Traffic Simulation to {dest_ip}:{dest_port}")
+    print(f"Traffic Direction: Random Internet (Src) -> Your Subnets (Dst)")
+    print(f"Cycle: 5m High -> 5m Low -> 40m High -> 5m Half -> 5m Low")
+
     while True:
-        if duration > 0 and (time.time() - start_time) > (duration * 60):
+        now = time.time()
+        elapsed_total = now - start_time
+        
+        if duration > 0 and elapsed_total > (duration * 60):
+            print("Total duration reached. Stopping.")
             break
         
-        # NetFlow v5 Header
+        cycle_pos = elapsed_total % 3600 
+        
+        # --- PATTERN LOGIC (In Seconds) ---
+        if cycle_pos < 300:        # 0 - 5 mins
+            sleep_time = SPEED_HIGH
+            phase_name = "HIGH VOLUME (5m)"
+        elif cycle_pos < 600:      # 5 - 10 mins
+            sleep_time = SPEED_LOW
+            phase_name = "LOW VOLUME (5m)"
+        elif cycle_pos < 3000:     # 10 - 50 mins
+            sleep_time = SPEED_HIGH
+            phase_name = "HIGH VOLUME (40m)"
+        elif cycle_pos < 3300:     # 50 - 55 mins
+            sleep_time = SPEED_HALF
+            phase_name = "HALF VOLUME (5m)"
+        else:                      # 55 - 60 mins
+            sleep_time = SPEED_LOW
+            phase_name = "LOW VOLUME (5m)"
+
+        # Logging
+        if phase_name != current_phase:
+            m, s = divmod(int(elapsed_total), 60)
+            print(f"[{m}m {s}s total] PHASE SWITCH -> {phase_name}")
+            current_phase = phase_name
+            
+        if (now - last_log_time) > 60:
+            m, s = divmod(int(elapsed_total), 60)
+            print(f"   ... [{m}m {s}s] Still running: {phase_name}")
+            last_log_time = now
+
+        # --- NetFlow Header (v5) ---
         version, count = 5, 1
         sys_uptime = int(time.time() * 1000) & 0xFFFFFFFF
         unix_secs = int(time.time())
-        unix_nsecs, flow_seq, engine_type, engine_id, sampling = 0, random.randint(1, 1000), 0, 0, 0
+        unix_nsecs, flow_seq, engine_type, engine_id = 0, random.randint(1, 1000), 0, 0
+        sampling = SAMPLING_RATE
         header = struct.pack('!HHIIIIBBH', version, count, sys_uptime, unix_secs, unix_nsecs, flow_seq, engine_type, engine_id, sampling)
 
-        # Traffic Randomization
-        src_ip_str = random.choice(src_prefixes) + str(random.randint(1, 254))
-        dst_ip_str = f"{random.randint(1, 223)}.{random.randint(0, 255)}.{random.randint(0, 255)}.{random.randint(1, 254)}"
+        # --- CHANGED: IP Direction Logic ---
+        # Source is now RANDOM (Simulating the Internet/Attackers)
+        src_ip_str = generate_random_ip()
+        
+        # Destination is now YOUR SUBNET (Simulating your infrastructure)
+        dst_ip_str = generate_subnet_ip()
         
         rand_proto = random.random()
         if rand_proto < 0.5: prot, s_port, d_port = 6, random.randint(1024, 65535), random.choice([80, 443, 8080])
@@ -36,23 +94,24 @@ def send_netflow(dest_ip, dest_port, duration):
         elif rand_proto < 0.85: prot, s_port, d_port = 6, random.randint(1024, 65535), 22
         else: prot, s_port, d_port = 1, 0, 0
 
-        # Flow Record
+        # Packing the record
         src_ip = socket.inet_aton(src_ip_str)
         dst_ip = socket.inet_aton(dst_ip_str)
         nexthop = socket.inet_aton("0.0.0.0")
         input_if, output_if = 1, 2
-        packets = random.randint(1, 500)
-        octets = packets * random.randint(40, 1500)
+        packets = random.randint(1, 50) 
+        octets = packets * random.randint(64, 1500)
         first, last = sys_uptime - 1000, sys_uptime
         tcp_flags, tos, src_as, dst_as, src_mask, dst_mask = 0, 0, 0, 0, 24, 24
+        pad1, pad2 = 0, 0
 
-        record = struct.pack('!4s4s4sHHIIIIHHBBHBBHH', 
+        record = struct.pack('!4s4s4sHHIIIIHHBBBBHHBBH', 
             src_ip, dst_ip, nexthop, input_if, output_if, 
             packets, octets, first, last, s_port, d_port, 
-            0, tcp_flags, prot, tos, src_as, dst_as, src_mask, dst_mask)
+            pad1, tcp_flags, prot, tos, src_as, dst_as, src_mask, dst_mask, pad2)
 
         sock.sendto(header + record, (dest_ip, dest_port))
-        time.sleep(0.05)
+        time.sleep(sleep_time)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

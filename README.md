@@ -19,7 +19,7 @@ This tool simulates NetFlow (v5) traffic to test Cloudflare Magic Network Monito
    Copy the contents of the `src/` directory to your web root:
    ```bash
    sudo cp src/* /var/www/html/
-   ``e
+   ```
 
 2. **Set Permissions**:
    Allow Apache to write the PID file in the directory:
