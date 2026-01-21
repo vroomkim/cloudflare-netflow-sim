@@ -5,7 +5,7 @@ This tool simulates NetFlow (v5) traffic to test Cloudflare Magic Network Monito
 ## Project Structure
 
 - `src/netflow_sim.py`: **Backend Engine**. A Python script that constructs and sends UDP packets mimicking NetFlow v5 data.
-- `src/index.php`: **Frontend Dashboard**. A PHP interface to start and stop the background Python process.
+- `src/netflow.php`: **Frontend Dashboard**. A PHP interface to start and stop the background Python process.
 
 ## Prerequisites
 
@@ -24,19 +24,19 @@ This tool simulates NetFlow (v5) traffic to test Cloudflare Magic Network Monito
 2. **Set Permissions**:
    Allow Apache to write the PID file in the directory:
    ```bash
-   sudo chown www-data:www-data /var/www/html/index.php
+   sudo chown www-data:www-data /var/www/html/netflow.php
    sudo chown www-data:www-data /var/www/html/netflow_sim.py
    sudo chmod 755 /var/www/html
    ```
 
 ## Usage
 
-1. Open your browser: `http://<YOUR_SERVER_IP>/index.php`
+1. Open your browser: `http://<YOUR_SERVER_IP>/netflow.php`
 2. Enter the **Cloudflare Entry IP** provided in your Cloudflare dashboard.
 3. Click **Start**. The dashboard will display the Process ID (PID) of the background generator.
 
 ## Traffic Details
 The generator simulates traffic from:
 - `100.1.1.0/24`
-- `212.10.11.0/27`
+- `212.10.11.0/24`
 - Traffic types: HTTP/HTTPS (TCP), DNS (UDP), SSH (TCP), and ICMP.
